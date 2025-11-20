@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Download, Share2, Loader2, RefreshCw, Star, Instagram, Facebook, Twitter, X, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Download, Share2, Loader2, RefreshCw, Star, Instagram, Facebook, Twitter, Monitor, X, Image as ImageIcon } from 'lucide-react';
 import { type Frame } from '../types';
 import { uploadToCloudinary } from '../services/cloudinary';
 import { savePhotoToHistory } from '../services/storage';
@@ -120,29 +120,24 @@ const CameraPage: React.FC<CameraPageProps> = ({ imageSrc, frame, onBack, onStar
             
             if (ctx) {
                 // 1. Draw Blurred Background (Fill)
-                // We simulate a glass effect by drawing the image scaled up and blurred
                 ctx.filter = 'blur(20px) brightness(0.7)';
-                
-                // Calculate scale to cover the canvas
                 const scaleCover = Math.max(width / img.width, height / img.height);
                 const wCover = img.width * scaleCover;
                 const hCover = img.height * scaleCover;
                 const xCover = (width - wCover) / 2;
                 const yCover = (height - hCover) / 2;
-                
                 ctx.drawImage(img, xCover, yCover, wCover, hCover);
                 
                 ctx.filter = 'none';
 
-                // 2. Draw Shadow for the main image
+                // 2. Draw Shadow
                 ctx.shadowColor = 'rgba(0,0,0,0.5)';
                 ctx.shadowBlur = 30;
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 10;
 
                 // 3. Draw Main Image (Fit)
-                // We scale it to 90% of the available space to show the blurred background
-                const scaleFit = Math.min(width / img.width, height / img.height) * 0.9;
+                const scaleFit = Math.min(width / img.width, height / img.height) * 0.9; // 90% scale for padding
                 const wFit = img.width * scaleFit;
                 const hFit = img.height * scaleFit;
                 const xFit = (width - wFit) / 2;
@@ -205,13 +200,8 @@ const CameraPage: React.FC<CameraPageProps> = ({ imageSrc, frame, onBack, onStar
     setLoadingText('Posting...');
 
     try {
-      // Upload to Cloudinary
       const url = await uploadToCloudinary(compositedImage);
-      
-      // Save the PUBLIC URL to history (better for storage quotas)
       savePhotoToHistory(url);
-      
-      // Navigate to Photo Wall with the new image URL
       onGoToWall(url);
     } catch (error) {
       console.error('Star Link error:', error);
