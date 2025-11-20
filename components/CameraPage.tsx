@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Download, Share2, Loader2, RefreshCw, Star, Instagram, Facebook, Twitter, Monitor, X, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Download, Share2, Loader2, RefreshCw, Star, Instagram, Facebook, Twitter, Monitor, X, Image as ImageIcon, Type, MoveVertical, Palette } from 'lucide-react';
 import { type Frame } from '../types';
 import { uploadToCloudinary } from '../services/cloudinary';
 import { savePhotoToHistory } from '../services/storage';
@@ -21,6 +21,12 @@ const CameraPage: React.FC<CameraPageProps> = ({ imageSrc, frame, onBack, onStar
   const [shareError, setShareError] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState('Generating...');
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
+  
+  // Text Customization State
+  const [showTextControls, setShowTextControls] = useState(false);
+  const [customText, setCustomText] = useState('');
+  const [textPosition, setTextPosition] = useState<'bottom' | 'top'>('bottom');
+  const [textColor, setTextColor] = useState<'white' | 'red'>('white');
 
   const drawCanvas = useCallback(async () => {
     setIsProcessing(true);
@@ -85,13 +91,52 @@ const CameraPage: React.FC<CameraPageProps> = ({ imageSrc, frame, onBack, onStar
             ctx.drawImage(userImage, 0, 0, canvas.width, canvas.height);
         }
 
+        // Draw Custom Text Overlay
+        if (customText.trim()) {
+            const text = customText.toUpperCase();
+            
+            // Dynamic font size based on text length and canvas width
+            // Base size is ~10% of width, scale down if text is long
+            const baseSize = canvas.width * 0.12;
+            const charCount = text.length;
+            const fontSize = charCount > 8 ? baseSize * (8 / charCount) : baseSize;
+            
+            ctx.font = `italic 900 ${fontSize}px Inter, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = textPosition === 'top' ? 'top' : 'bottom';
+            
+            const x = canvas.width / 2;
+            // Padding from edges
+            const yPadding = canvas.height * 0.05; 
+            const y = textPosition === 'top' ? yPadding : canvas.height - yPadding;
+
+            // Shadow/Glow
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 4;
+
+            // Stroke (Thick outline for readability)
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = fontSize * 0.08;
+            ctx.lineJoin = 'round';
+            ctx.strokeText(text, x, y);
+
+            // Fill
+            ctx.fillStyle = textColor === 'red' ? '#b91c1c' : '#ffffff';
+            ctx.fillText(text, x, y);
+            
+            // Reset shadow for next draw
+            ctx.shadowColor = 'transparent';
+        }
+
         setCompositedImage(canvas.toDataURL('image/jpeg', 0.9));
     } catch (error) {
         console.error("Error loading images for canvas", error);
     } finally {
         setIsProcessing(false);
     }
-  }, [imageSrc, frame]);
+  }, [imageSrc, frame, customText, textPosition, textColor]);
   
   useEffect(() => {
     drawCanvas();
@@ -267,13 +312,23 @@ const CameraPage: React.FC<CameraPageProps> = ({ imageSrc, frame, onBack, onStar
 
        {/* Header */}
        <header className="flex items-center justify-between p-4 bg-red-700 z-10 flex-none">
-        <button onClick={onBack} className="p-2 hover:bg-red-800 rounded transition-colors">
-            <ArrowLeft className="w-6 h-6 text-white" />
-        </button>
+        <div className="flex items-center gap-1">
+            <button onClick={onBack} className="p-2 hover:bg-red-800 rounded transition-colors">
+                <ArrowLeft className="w-6 h-6 text-white" />
+            </button>
+        </div>
         <h2 className="text-xl font-sans font-black italic text-white uppercase tracking-tighter transform -skew-x-6">Review</h2>
-        <button onClick={onStartOver} className="p-2 hover:bg-red-800 rounded transition-colors">
-            <RefreshCw className="w-5 h-5 text-white" />
-        </button>
+        <div className="flex items-center gap-1">
+            <button 
+                onClick={() => setShowTextControls(!showTextControls)} 
+                className={`p-2 rounded transition-colors ${showTextControls ? 'bg-white text-red-700' : 'hover:bg-red-800 text-white'}`}
+            >
+                <Type className="w-5 h-5" />
+            </button>
+            <button onClick={onStartOver} className="p-2 hover:bg-red-800 rounded transition-colors">
+                <RefreshCw className="w-5 h-5" />
+            </button>
+        </div>
       </header>
 
       {/* Canvas Container */}
@@ -293,6 +348,37 @@ const CameraPage: React.FC<CameraPageProps> = ({ imageSrc, frame, onBack, onStar
             )}
         </div>
       </main>
+
+      {/* Text Controls Toolbar */}
+      {showTextControls && (
+        <div className="bg-neutral-900 p-3 border-b border-neutral-800 animate-slide-up z-20 flex-none">
+            <div className="flex flex-col gap-3">
+                <input 
+                    type="text" 
+                    placeholder="ENTER NAME OR TEXT..." 
+                    value={customText}
+                    onChange={(e) => setCustomText(e.target.value)}
+                    className="w-full bg-neutral-800 border border-neutral-700 text-white px-3 py-2 rounded font-bold italic uppercase placeholder-neutral-500 focus:border-red-600 outline-none"
+                />
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setTextPosition(prev => prev === 'bottom' ? 'top' : 'bottom')}
+                        className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded text-xs font-bold uppercase flex items-center justify-center gap-2"
+                    >
+                        <MoveVertical className="w-4 h-4" />
+                        {textPosition === 'bottom' ? 'Bottom' : 'Top'}
+                    </button>
+                    <button 
+                        onClick={() => setTextColor(prev => prev === 'white' ? 'red' : 'white')}
+                        className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white py-2 rounded text-xs font-bold uppercase flex items-center justify-center gap-2"
+                    >
+                        <Palette className="w-4 h-4" />
+                        {textColor === 'white' ? 'White Text' : 'Red Text'}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Footer Controls */}
       <footer className="p-4 bg-red-700 z-10 flex-none shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
