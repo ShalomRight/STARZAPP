@@ -15,7 +15,7 @@ export const CLOUDINARY_CONFIG = {
 export const FRAMES: Frame[] = [
   { id: 'default-1', name: 'Classic Border', category: 'minimal', url: 'https://ik.imagekit.io/bcmzxhknk3/PhotoApp/socials_reel__9-16__1080x1920_1.png' },
   { id: 'default-2', name: 'Elegant Frame', category: 'minimal', url: 'https://ik.imagekit.io/bcmzxhknk3/PhotoApp/socials_reel__9-16__1080x1920_2.png' },
-  { id: 'default-3', name: 'Party Vibes', category: 'fun', url: '/frames/default-3.png' },
+  { id: 'default-3', name: 'Party Vibes', category: 'fun', url: 'https://ik.imagekit.io/bcmzxhknk3/PhotoApp/Labour%20youth%20rally.png' },
   { id: 'default-4', name: 'Event Special', category: 'events', url: '/frames/default-4.png' },
   { id: 'default-5', name: 'Celebration', category: 'events', url: '/frames/default-5.png' },
 ];
