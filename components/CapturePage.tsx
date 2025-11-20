@@ -1,5 +1,6 @@
+
 import React, { useRef, useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, Zap, ZapOff, Timer, Grid3x3 } from 'lucide-react';
 
 interface CapturePageProps {
   onPhotoTaken: (image: string) => void;
@@ -9,15 +10,26 @@ interface CapturePageProps {
 const CapturePage: React.FC<CapturePageProps> = ({ onPhotoTaken, onBack }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Camera State
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  
+  // Features State
+  const [hasFlash, setHasFlash] = useState(false);
+  const [flashEnabled, setFlashEnabled] = useState(false);
+  const [isFlashing, setIsFlashing] = useState(false); // Visual effect for front camera
+  const [showGrid, setShowGrid] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
+  // Initialize Camera
   useEffect(() => {
     const startCamera = async (mode: 'user' | 'environment') => {
       setIsInitializing(true);
       setError(null);
+      setFlashEnabled(false);
       
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -25,12 +37,24 @@ const CapturePage: React.FC<CapturePageProps> = ({ onPhotoTaken, onBack }) => {
   
       try {
         const newStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: mode, width: { ideal: 1280 }, height: { ideal: 720 } }
+          video: { 
+            facingMode: mode, 
+            width: { ideal: 1920 }, // Higher res for "Phase 2" quality
+            height: { ideal: 1080 } 
+          }
         });
+
         if (videoRef.current) {
           videoRef.current.srcObject = newStream;
           setStream(newStream);
         }
+
+        // Check for Torch capability
+        const track = newStream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities();
+        // @ts-ignore - 'torch' exists in modern browsers but TS might complain
+        setHasFlash(!!capabilities.torch);
+
       } catch (err) {
         console.error("Error accessing camera:", err);
         setError("Could not access the camera. Please check permissions.");
@@ -47,17 +71,58 @@ const CapturePage: React.FC<CapturePageProps> = ({ onPhotoTaken, onBack }) => {
     };
   }, [facingMode]);
 
+  // Toggle Flash (Torch)
+  const toggleFlash = async () => {
+    if (!stream || !hasFlash) return;
+    const track = stream.getVideoTracks()[0];
+    const newStatus = !flashEnabled;
+    
+    try {
+      // @ts-ignore
+      await track.applyConstraints({ advanced: [{ torch: newStatus }] });
+      setFlashEnabled(newStatus);
+    } catch (e) {
+      console.error("Flash toggle failed", e);
+    }
+  };
+
+  // Trigger Countdown
+  const startCountdown = () => {
+    if (countdown !== null) return; // Prevent double clicks
+    setCountdown(3);
+  };
+
+  // Handle Countdown Tick
+  useEffect(() => {
+    if (countdown === null) return;
+
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else {
+      // Countdown finished
+      handleCapture();
+      setCountdown(null);
+    }
+  }, [countdown]);
+
+  // Capture Logic
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
+    // Visual Flash Effect (Software Flash)
+    setIsFlashing(true);
+    setTimeout(() => setIsFlashing(false), 150);
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    // Mirror if front camera
     if (facingMode === 'user') {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
@@ -65,7 +130,8 @@ const CapturePage: React.FC<CapturePageProps> = ({ onPhotoTaken, onBack }) => {
     
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    // High quality export
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
     onPhotoTaken(dataUrl);
   };
 
@@ -74,39 +140,116 @@ const CapturePage: React.FC<CapturePageProps> = ({ onPhotoTaken, onBack }) => {
   };
   
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      <header className="flex items-center justify-between p-4 bg-black/30 z-10 absolute top-0 left-0 right-0">
-        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full">
+    <div className="h-full bg-neutral-950 text-white flex flex-col relative overflow-hidden">
+      
+      {/* Header */}
+      <header className="flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent z-20 absolute top-0 left-0 right-0">
+        <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <ArrowLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-xl font-semibold">Take a Photo</h2>
-        <button onClick={handleSwitchCamera} disabled={isInitializing} className="p-2 hover:bg-white/10 rounded-full">
-          <RefreshCw className="w-6 h-6" />
-        </button>
+        
+        <div className="flex items-center gap-4">
+             {/* Grid Toggle */}
+            <button 
+                onClick={() => setShowGrid(!showGrid)} 
+                className={`p-2 rounded-full transition-colors ${showGrid ? 'text-red-500 bg-white/10' : 'text-white hover:bg-white/10'}`}
+            >
+                <Grid3x3 className="w-6 h-6" />
+            </button>
+
+            {/* Flash Toggle */}
+            {hasFlash && (
+                <button 
+                    onClick={toggleFlash} 
+                    className={`p-2 rounded-full transition-colors ${flashEnabled ? 'text-yellow-400 bg-white/10' : 'text-white hover:bg-white/10'}`}
+                >
+                    {flashEnabled ? <Zap className="w-6 h-6 fill-current" /> : <ZapOff className="w-6 h-6" />}
+                </button>
+            )}
+
+            {/* Camera Switch */}
+            <button onClick={handleSwitchCamera} disabled={isInitializing} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                <RefreshCw className="w-6 h-6" />
+            </button>
+        </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center relative">
-        {isInitializing && <Loader2 className="w-10 h-10 animate-spin" />}
-        {error && <p className="text-red-400 p-4 text-center">{error}</p>}
+      {/* Main Viewfinder */}
+      <main className="flex-1 flex items-center justify-center relative bg-black">
+        {isInitializing && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-neutral-900">
+                <Loader2 className="w-10 h-10 animate-spin text-red-600 mb-2" />
+                <p className="font-sans font-black italic uppercase text-sm">Starting Camera...</p>
+            </div>
+        )}
+        
+        {error && <p className="text-red-400 p-4 text-center z-10">{error}</p>}
+        
         <video 
           ref={videoRef} 
           autoPlay 
           playsInline 
-          className={`w-full h-full object-cover ${isInitializing || error ? 'hidden' : ''}`}
+          muted
+          className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
           onLoadedData={() => setIsInitializing(false)}
         />
+
+        {/* Software Flash Overlay */}
+        {isFlashing && <div className="absolute inset-0 bg-white z-30 animate-pulse pointer-events-none" />}
+
+        {/* Grid Overlay */}
+        {showGrid && (
+            <div className="absolute inset-0 pointer-events-none z-10 grid grid-cols-3 grid-rows-3">
+                <div className="border-r border-b border-white/30"></div>
+                <div className="border-r border-b border-white/30"></div>
+                <div className="border-b border-white/30"></div>
+                <div className="border-r border-b border-white/30"></div>
+                <div className="border-r border-b border-white/30"></div>
+                <div className="border-b border-white/30"></div>
+                <div className="border-r border-white/30"></div>
+                <div className="border-r border-white/30"></div>
+                <div className=""></div>
+            </div>
+        )}
+
+        {/* Countdown Overlay */}
+        {countdown !== null && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                <div className="text-[10rem] font-black italic text-white animate-bounce drop-shadow-lg">
+                    {countdown}
+                </div>
+            </div>
+        )}
+
         <canvas ref={canvasRef} className="hidden" />
       </main>
 
-      <footer className="p-6 bg-black/30 z-10 flex items-center justify-center">
-        <button
-          onClick={handleCapture}
-          disabled={isInitializing || !!error}
-          aria-label="Take Photo"
-          className="w-20 h-20 rounded-full bg-white flex items-center justify-center border-4 border-gray-400 disabled:opacity-50 transition active:scale-95"
+      {/* Footer Controls */}
+      <footer className="p-8 bg-gradient-to-t from-black/90 to-transparent z-20 flex items-center justify-center gap-12 relative">
+        
+        {/* Timer Button */}
+        <button 
+            onClick={() => setCountdown(countdown === null ? 3 : null)}
+            className={`flex flex-col items-center gap-1 transition-colors ${countdown ? 'text-red-500' : 'text-white/80 hover:text-white'}`}
         >
-            <div className="w-16 h-16 rounded-full bg-white ring-2 ring-inset ring-black"></div>
+            <Timer className="w-6 h-6" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+                {countdown ? 'On' : 'Timer'}
+            </span>
         </button>
+
+        {/* Shutter Button */}
+        <button
+          onClick={startCountdown}
+          disabled={isInitializing || !!error || countdown !== null}
+          aria-label="Take Photo"
+          className="w-20 h-20 rounded-full bg-white flex items-center justify-center border-4 border-neutral-400 disabled:opacity-50 transition-all active:scale-95 shadow-lg"
+        >
+            <div className={`w-16 h-16 rounded-full bg-white ring-2 ring-inset ring-black ${countdown !== null ? 'animate-pulse bg-red-500' : ''}`}></div>
+        </button>
+        
+        {/* Spacer for balance */}
+        <div className="w-10"></div>
       </footer>
     </div>
   );
